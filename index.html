@@ -7,199 +7,179 @@
     <style>
         :root {
             --primary-blue: #344861;
-            --highlight-blue: #e3f2fd;
+            --highlight-bg: #e3f2fd;
             --selected-blue: #3d5afe;
             --error-red: #e91e63;
             --border-thick: 2px solid #344861;
             --border-thin: 1px solid #bec6d4;
         }
 
-        /* 終極鎖定：確保整個頁面就是一個手機螢幕高度，不准捲動 */
-        html, body { 
-            position: fixed;
-            width: 100%;
-            height: 100%;
-            margin: 0; padding: 0;
-            overflow: hidden;
-            background-color: #f5f7fa;
+        /* 鎖定佈局，禁止任何形式的捲動 */
+        html, body {
+            position: fixed; width: 100%; height: 100%;
+            margin: 0; padding: 0; overflow: hidden;
+            background-color: #f8f9fa;
             font-family: -apple-system, sans-serif;
         }
 
-        body { 
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between; /* 讓內容上下撐開 */
-            padding-bottom: env(safe-area-inset-bottom); /* 適配 iPhone 底部橫條 */
+        /* 使用 Flexbox 垂直分配空間 */
+        .app-container {
+            display: flex; flex-direction: column;
+            width: 100%; height: 100%;
+            padding-bottom: env(safe-area-inset-bottom);
         }
 
-        /* 頂部資訊區 */
-        header { 
-            height: 60px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            padding: 0 15px;
-        }
-        .stats-bar { 
-            display: flex; justify-content: space-between; 
-            font-size: 14px; color: #555;
+        /* 1. 頂部狀態欄 (固定高度) */
+        .header {
+            height: 50px; display: flex; align-items: center;
+            justify-content: space-between; padding: 0 20px;
+            font-size: 14px; color: var(--primary-blue);
         }
 
-        /* 棋盤容器：關鍵修正，使用 flex-grow 讓它佔據最大可用空間 */
-        .board-wrapper {
-            flex-grow: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
+        /* 2. 棋盤容器 (自動適應剩餘空間) */
+        .board-container {
+            flex: 1; /* 佔據中間所有可用空間 */
+            display: flex; align-items: center; justify-content: center;
+            padding: 5px;
         }
 
-        .sudoku-board {
-            display: grid; 
-            grid-template-columns: repeat(9, 1fr);
-            width: 94vw; 
-            height: 94vw; 
-            max-width: 400px; 
-            max-height: 400px; 
-            border: var(--border-thick); 
-            background: white;
-            touch-action: none;
+        .sudoku-grid {
+            display: grid; grid-template-columns: repeat(9, 1fr);
+            /* 關鍵：確保是正方形且不超出父容器 */
+            width: 94vw; height: 94vw; 
+            max-width: min(94vw, 45vh); /* 防止在長手機上棋盤太大 */
+            max-height: min(94vw, 45vh);
+            background: white; border: var(--border-thick);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         }
 
         .cell {
-            border: var(--border-thin); 
-            display: flex; align-items: center; justify-content: center;
-            font-size: min(6vw, 24px); /* 字體大小隨螢幕縮放 */
-            position: relative;
+            border: var(--border-thin); display: flex; align-items: center;
+            justify-content: center; font-size: 22px; position: relative;
+            background: #fff; transition: background 0.1s;
         }
 
-        /* 九宮格線 */
+        /* 粗線隔間 */
         .cell:nth-child(3n) { border-right: var(--border-thick); }
         .cell:nth-child(9n) { border-right: var(--border-thin); }
         .cell:nth-child(n+19):nth-child(-n+27), .cell:nth-child(n+46):nth-child(-n+54) { border-bottom: var(--border-thick); }
 
+        /* 格子狀態樣式 */
         .cell.selected { background-color: var(--selected-blue) !important; color: white; }
-        .cell.related { background-color: var(--highlight-blue); }
+        .cell.related { background-color: var(--highlight-bg); }
         .cell.same-num { background-color: #d1e9ff; }
         .cell.error { color: var(--error-red); background-color: #ffd7e0; }
-        .cell.fixed { font-weight: 800; color: #000; }
+        .cell.fixed { font-weight: 900; color: #000; }
 
-        /* 功能按鈕區 */
-        .controls { 
-            height: 60px;
-            display: flex; 
-            justify-content: space-around; 
-            align-items: center;
-            width: 100%;
-            max-width: 400px;
-            margin: 0 auto;
+        .notes-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            width: 100%; height: 100%; font-size: 9px; color: #888;
         }
-        .btn-tool { background: none; border: none; font-size: 12px; color: #666; flex: 1; cursor: pointer; }
-        .active-tool { color: var(--selected-blue); font-weight: bold; }
 
-        /* 數字鍵盤區 */
-        .numpad-wrapper {
-            height: 70px;
-            padding-bottom: 10px;
+        /* 3. 工具按鈕區 (固定高度) */
+        .toolbar {
+            height: 60px; display: flex; justify-content: space-around;
+            align-items: center; width: 100%; max-width: 400px; margin: 0 auto;
         }
-        .numpad { 
-            display: flex; 
-            justify-content: space-between;
-            width: 94vw; 
-            max-width: 400px;
-            margin: 0 auto;
-            gap: 4px;
+        .tool-btn { 
+            background: none; border: none; font-size: 12px; color: #666; 
+            text-align: center; cursor: pointer; flex: 1;
+        }
+        .tool-btn.active { color: var(--selected-blue); font-weight: bold; }
+
+        /* 4. 數字鍵盤區 (固定高度) */
+        .numpad {
+            height: 80px; display: flex; justify-content: center;
+            align-items: center; padding-bottom: 15px;
+        }
+        .num-container {
+            display: flex; width: 94vw; max-width: 400px; gap: 5px;
         }
         .num-btn {
-            flex: 1;
-            height: 55px;
-            background: white; border-radius: 8px; border: 1px solid #ddd;
-            font-size: 24px; display: flex; align-items: center; justify-content: center;
-            color: var(--selected-blue); font-weight: bold;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            flex: 1; height: 55px; background: white; border-radius: 8px;
+            border: 1px solid #ddd; font-size: 24px; font-weight: bold;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--selected-blue); box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
 
-        /* 蓋板樣式保持 */
+        /* 全螢幕覆蓋層 */
         .overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255,255,255,0.98); z-index: 1000;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            text-align: center;
+            position: fixed; inset: 0; background: rgba(255,255,255,0.98);
+            z-index: 1000; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; text-align: center;
         }
         .menu-btn {
-            width: 220px; padding: 16px; margin: 10px; border: none;
-            border-radius: 40px; background: var(--selected-blue); color: white;
+            width: 200px; padding: 15px; margin: 10px; border: none;
+            border-radius: 30px; background: var(--selected-blue); color: white;
             font-size: 18px; font-weight: bold;
         }
-        .notes-grid { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; height: 100%; font-size: 9px; color: #888; }
     </style>
 </head>
 <body>
 
-<div id="start-menu" class="overlay">
-    <h1 style="color:var(--primary-blue);">連惠香數獨挑戰！</h1>
-    <p>請選擇難度開始</p>
-    <button class="menu-btn" onclick="startGame('easy')">容易</button>
-    <button class="menu-btn" onclick="startGame('medium')">普通</button>
-    <button class="menu-btn" onclick="startGame('hard')">困難</button>
-</div>
-
-<div id="win-modal" class="overlay" style="display:none;">
-    <h1 style="font-size: 60px;">🏅</h1>
-    <h2>恭喜連惠香挑戰成功！</h2>
-    <p id="final-time"></p>
-    <button class="menu-btn" onclick="resetToMenu()">開始新遊戲</button>
-</div>
-
-<header>
-    <div class="stats-bar">
-        <span id="label-diff">難度: -</span>
-        <span id="mistakes">錯誤: 0/10</span>
-        <span id="timer">00:00</span>
+<div class="app-container">
+    <div id="start-menu" class="overlay">
+        <h1 style="color:var(--primary-blue); margin-bottom:5px;">連惠香數獨挑戰！</h1>
+        <p style="margin-bottom:30px; color:#666;">真正邏輯出題系統</p>
+        <button class="menu-btn" onclick="startGame('easy')">容易 (初學者)</button>
+        <button class="menu-btn" onclick="startGame('medium')">普通 (進階)</button>
+        <button class="menu-btn" onclick="startGame('hard')">困難 (挑戰級)</button>
     </div>
-</header>
 
-<div class="board-wrapper">
-    <div class="sudoku-board" id="board"></div>
-</div>
+    <div id="win-modal" class="overlay" style="display:none;">
+        <h1 style="font-size: 60px;">🏅</h1>
+        <h2 style="color:var(--selected-blue);">恭喜連惠香挑戰成功！</h2>
+        <p id="final-time" style="font-size: 18px; color: #555;"></p>
+        <button class="menu-btn" onclick="resetToMenu()">開始新遊戲</button>
+    </div>
 
-<div class="controls">
-    <button class="btn-tool" onclick="undo()">↩️<br>撤銷</button>
-    <button class="btn-tool" onclick="eraseCell()">🧽<br>擦除</button>
-    <button class="btn-tool" id="note-btn" onclick="toggleNote()">✏️<br>筆記: 關</button>
-    <button class="btn-tool" onclick="useHint()">💡<br>提示</button>
-</div>
+    <div class="header">
+        <span id="diff-text">難度: -</span>
+        <span id="mistake-text">錯誤: 0/10</span>
+        <span id="timer-text">00:00</span>
+    </div>
 
-<div class="numpad-wrapper">
-    <div class="numpad" id="numpad"></div>
+    <div class="board-container">
+        <div class="sudoku-grid" id="grid"></div>
+    </div>
+
+    <div class="toolbar">
+        <button class="tool-btn" onclick="undo()">↩️<br>撤銷</button>
+        <button class="tool-btn" onclick="erase()">🧽<br>擦除</button>
+        <button class="tool-btn" id="note-btn" onclick="toggleNote()">✏️<br>筆記: 關</button>
+        <button class="tool-btn" onclick="hint()">💡<br>提示</button>
+    </div>
+
+    <div class="numpad">
+        <div class="num-container" id="numpad"></div>
+    </div>
 </div>
 
 <script>
     let solution = [], puzzle = [], displayGrid = [];
     let selectedIdx = null, isNoteMode = false, mistakes = 0, seconds = 0;
-    let timerInterval, historyStack = [];
+    let timer, history = [];
 
-    function isValid(board, r, c, n) {
-        for (let i = 0; i < 9; i++) if (board[r][i] === n || board[i][c] === n) return false;
-        let sR = Math.floor(r / 3) * 3, sC = Math.floor(c / 3) * 3;
-        for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) if (board[sR + i][sC + j] === n) return false;
+    // --- 改良版數獨算法 ---
+    function isValid(b, r, c, n) {
+        for (let i = 0; i < 9; i++) if (b[r*9+i] === n || b[i*9+c] === n) return false;
+        let sR = Math.floor(r/3)*3, sC = Math.floor(c/3)*3;
+        for (let i=0; i<3; i++) for (let j=0; j<3; j++) if (b[(sR+i)*9+(sC+j)] === n) return false;
         return true;
     }
 
-    function fillBoard(board) {
-        for (let r = 0; r < 9; r++) {
-            for (let c = 0; c < 9; c++) {
-                if (board[r][c] === 0) {
-                    let nums = [1,2,3,4,5,6,7,8,9].sort(() => Math.random() - 0.5);
-                    for (let n of nums) {
-                        if (isValid(board, r, c, n)) {
-                            board[r][c] = n;
-                            if (fillBoard(board)) return true;
-                            board[r][c] = 0;
-                        }
+    function solve(b) {
+        for (let i = 0; i < 81; i++) {
+            if (b[i] === 0) {
+                let nums = [1,2,3,4,5,6,7,8,9].sort(() => Math.random()-0.5);
+                for (let n of nums) {
+                    if (isValid(b, Math.floor(i/9), i%9, n)) {
+                        b[i] = n;
+                        if (solve(b)) return true;
+                        b[i] = 0;
                     }
-                    return false;
                 }
+                return false;
             }
         }
         return true;
@@ -208,90 +188,90 @@
     function startGame(diff) {
         document.getElementById('start-menu').style.display = 'none';
         document.getElementById('win-modal').style.display = 'none';
-        document.getElementById('label-diff').innerText = `難度: ${diff==='easy'?'容易':diff==='medium'?'普通':'困難'}`;
-        mistakes = 0; seconds = 0; historyStack = []; selectedIdx = null; isNoteMode = false;
-        document.getElementById('mistakes').innerText = `錯誤: 0/10`;
+        document.getElementById('diff-text').innerText = `難度: ${diff==='easy'?'容易':diff==='medium'?'普通':'困難'}`;
+        
+        mistakes = 0; seconds = 0; history = []; selectedIdx = null; isNoteMode = false;
+        document.getElementById('mistake-text').innerText = `錯誤: 0/10`;
+        document.getElementById('note-btn').classList.remove('active');
         document.getElementById('note-btn').innerHTML = "✏️<br>筆記: 關";
 
-        let board = Array.from({length: 9}, () => Array(9).fill(0));
-        fillBoard(board);
-        solution = board.flat();
-        let holes = diff === 'easy' ? 35 : diff === 'medium' ? 45 : 55;
+        let b = Array(81).fill(0);
+        solve(b);
+        solution = [...b];
+        
+        // 根據真正難度挖洞 (對稱挖洞邏輯)
+        let holes = diff === 'easy' ? 38 : diff === 'medium' ? 48 : 56;
         puzzle = [...solution];
-        let ids = Array.from({length: 81}, (_, i) => i).sort(() => Math.random() - 0.5);
-        for (let i = 0; i < holes; i++) puzzle[ids[i]] = null;
+        let attempts = 0;
+        while(attempts < holes) {
+            let i = Math.floor(Math.random()*81);
+            if(puzzle[i] !== null) { puzzle[i] = null; attempts++; }
+        }
 
         initUI();
         startTimer();
     }
 
-    function resetToMenu() {
-        document.getElementById('win-modal').style.display = 'none';
-        document.getElementById('start-menu').style.display = 'flex';
-        clearInterval(timerInterval);
-    }
-
     function initUI() {
-        const b = document.getElementById('board');
-        const n = document.getElementById('numpad');
-        b.innerHTML = ''; n.innerHTML = '';
-        displayGrid = puzzle.map((val, i) => ({ val, correct: solution[i], isFixed: val !== null, notes: new Set(), isError: false }));
+        const gridEl = document.getElementById('grid');
+        const numEl = document.getElementById('numpad');
+        gridEl.innerHTML = ''; numEl.innerHTML = '';
+        displayGrid = puzzle.map((v, i) => ({ v, correct: solution[i], fixed: v !== null, notes: new Set(), err: false }));
 
         for (let i = 0; i < 81; i++) {
             let c = document.createElement('div');
             c.className = 'cell';
-            if (displayGrid[i].isFixed) c.classList.add('fixed');
+            if (displayGrid[i].fixed) c.classList.add('fixed');
             c.onclick = () => { selectedIdx = i; render(); };
-            b.appendChild(c);
+            gridEl.appendChild(c);
         }
 
         for (let i = 1; i <= 9; i++) {
             let btn = document.createElement('div');
-            btn.className = 'num-btn';
-            btn.innerText = i;
-            btn.onclick = () => handleInput(i);
-            n.appendChild(btn);
+            btn.className = 'num-btn'; btn.innerText = i;
+            btn.onclick = () => input(i);
+            numEl.appendChild(btn);
         }
         render();
     }
 
     function render() {
         displayGrid.forEach((data, i) => {
-            let cell = document.getElementById('board').children[i];
+            let cell = document.getElementById('grid').children[i];
             cell.innerHTML = ''; cell.classList.remove('selected', 'related', 'same-num', 'error');
-            if (data.val) {
-                cell.innerText = data.val;
-                if (data.isError) cell.classList.add('error');
+            if (data.v) {
+                cell.innerText = data.v;
+                if (data.err) cell.classList.add('error');
             } else if (data.notes.size > 0) {
                 let g = document.createElement('div'); g.className = 'notes-grid';
-                [1,2,3,4,5,6,7,8,9].forEach(n => { let d = document.createElement('div'); d.innerText = data.notes.has(n) ? n : ''; g.appendChild(d); });
+                for(let n=1; n<=9; n++) { let d = document.createElement('div'); d.innerText = data.notes.has(n)?n:''; g.appendChild(d); }
                 cell.appendChild(g);
             }
             if (selectedIdx !== null) {
                 let r = Math.floor(i/9), c = i%9, sr = Math.floor(selectedIdx/9), sc = selectedIdx%9;
                 if (i === selectedIdx) cell.classList.add('selected');
                 else if (r === sr || c === sc || (Math.floor(r/3)===Math.floor(sr/3) && Math.floor(c/3)===Math.floor(sc/3))) cell.classList.add('related');
-                if (data.val && data.val === displayGrid[selectedIdx].val) cell.classList.add('same-num');
+                if (data.v && data.v === displayGrid[selectedIdx].v) cell.classList.add('same-num');
             }
         });
     }
 
-    function handleInput(num) {
-        if (selectedIdx === null || displayGrid[selectedIdx].isFixed) return;
+    function input(n) {
+        if (selectedIdx === null || displayGrid[selectedIdx].fixed) return;
         saveHistory();
         let cell = displayGrid[selectedIdx];
         if (isNoteMode) {
-            cell.val = null; cell.isError = false;
-            cell.notes.has(num) ? cell.notes.delete(num) : cell.notes.add(num);
+            cell.v = null; cell.err = false;
+            cell.notes.has(n) ? cell.notes.delete(n) : cell.notes.add(n);
         } else {
-            cell.val = num; cell.notes.clear();
-            if (num !== cell.correct) {
-                cell.isError = true; mistakes++;
-                document.getElementById('mistakes').innerText = `錯誤: ${mistakes}/10`;
+            cell.v = n; cell.notes.clear();
+            if (n !== cell.correct) {
+                cell.err = true; mistakes++;
+                document.getElementById('mistake-text').innerText = `錯誤: ${mistakes}/10`;
                 if (mistakes >= 10) { alert("挑戰失敗！"); resetToMenu(); }
             } else {
-                cell.isError = false;
-                if (displayGrid.every(d => d.val === d.correct)) win();
+                cell.err = false;
+                if (displayGrid.every(d => d.v === d.correct)) win();
             }
         }
         render();
@@ -299,52 +279,58 @@
 
     function toggleNote() {
         isNoteMode = !isNoteMode;
-        document.getElementById('note-btn').classList.toggle('active-tool', isNoteMode);
+        document.getElementById('note-btn').classList.toggle('active', isNoteMode);
         document.getElementById('note-btn').innerHTML = isNoteMode ? "✏️<br>筆記: 開" : "✏️<br>筆記: 關";
     }
 
-    function eraseCell() {
-        if (selectedIdx !== null && !displayGrid[selectedIdx].isFixed) {
+    function erase() {
+        if (selectedIdx !== null && !displayGrid[selectedIdx].fixed) {
             saveHistory();
-            displayGrid[selectedIdx].val = null; displayGrid[selectedIdx].notes.clear(); displayGrid[selectedIdx].isError = false;
+            displayGrid[selectedIdx].v = null; displayGrid[selectedIdx].notes.clear(); displayGrid[selectedIdx].err = false;
             render();
         }
     }
 
-    function useHint() {
-        if (selectedIdx !== null && !displayGrid[selectedIdx].isFixed) {
+    function hint() {
+        if (selectedIdx !== null && !displayGrid[selectedIdx].fixed) {
             saveHistory();
-            displayGrid[selectedIdx].val = displayGrid[selectedIdx].correct;
-            displayGrid[selectedIdx].isFixed = true; displayGrid[selectedIdx].isError = false;
+            displayGrid[selectedIdx].v = displayGrid[selectedIdx].correct;
+            displayGrid[selectedIdx].fixed = true; displayGrid[selectedIdx].err = false;
             render(); if (displayGrid.every(d => d.val === d.correct)) win();
         }
     }
 
     function saveHistory() {
-        historyStack.push(JSON.stringify(displayGrid.map(d => ({...d, notes: Array.from(d.notes)}))));
-        if (historyStack.length > 30) historyStack.shift();
+        history.push(JSON.stringify(displayGrid.map(d => ({...d, notes: Array.from(d.notes)}))));
+        if (history.length > 30) history.shift();
     }
 
     function undo() {
-        if (historyStack.length > 0) { 
-            displayGrid = JSON.parse(historyStack.pop()).map(d => ({...d, notes: new Set(d.notes)}));
+        if (history.length > 0) { 
+            displayGrid = JSON.parse(history.pop()).map(d => ({...d, notes: new Set(d.notes)}));
             render(); 
         }
     }
 
     function startTimer() {
-        if(timerInterval) clearInterval(timerInterval);
-        timerInterval = setInterval(() => {
+        if(timer) clearInterval(timer);
+        timer = setInterval(() => {
             seconds++;
             let m = Math.floor(seconds/60).toString().padStart(2,'0'), s = (seconds%60).toString().padStart(2,'0');
-            document.getElementById('timer').innerText = `${m}:${s}`;
+            document.getElementById('timer-text').innerText = `${m}:${s}`;
         }, 1000);
     }
 
     function win() {
-        clearInterval(timerInterval);
-        document.getElementById('final-time').innerText = `總用時：${document.getElementById('timer').innerText}`;
+        clearInterval(timer);
+        document.getElementById('final-time').innerText = `總用時：${document.getElementById('timer-text').innerText}`;
         document.getElementById('win-modal').style.display = 'flex';
+    }
+
+    function resetToMenu() {
+        document.getElementById('win-modal').style.display = 'none';
+        document.getElementById('start-menu').style.display = 'flex';
+        clearInterval(timer);
     }
 </script>
 </body>
