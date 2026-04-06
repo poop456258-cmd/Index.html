@@ -162,3 +162,214 @@
         </div>
     </div>
 </div>
+
+<div id="win-overlay">
+    <div class="win-title">挑戰成功！</div>
+    <div class="win-name">恭喜連惠香小姐破關！</div>
+    <div id="golf-anim">🏌️‍♂️⛳️</div>
+    <button class="restart-btn" onclick="startNewGame()">再玩一次</button>
+</div>
+
+<script>
+    let currentGrid = []; // 玩家目前的棋盤
+    let originalGrid = []; // 原始題目
+    let solution = []; // 正確答案
+    let notes = Array.from({ length: 81 }, () => []); // 筆記數據
+    let history = []; // 撤銷歷史
+    let selectedIdx = -1;
+    let errors = 0;
+    let timerInterval;
+    let seconds = 0;
+    let noteMode = false;
+
+    // --- 題目數據 (容易模式 - 與截圖不同，為了展示填色功能) ---
+    // 這裡使用一個快要完成的謎題，方便測試過關畫面
+    const puzzle = {
+        quest: "748296530159304706020751940902645103815032467364170205284567319697013852000829600",
+        sol:   "748296531159384726326751948972645183815932467364178295284567319697413852513829674"
+    }
+
+    // --- 初始化 ---
+    function initGame(p) {
+        currentGrid = p.quest.split('').map(c => parseInt(c));
+        originalGrid = [...currentGrid];
+        solution = p.sol.split('').map(c => parseInt(c));
+        notes = Array.from({ length: 81 }, () => []);
+        history = [];
+        errors = 0;
+        selectedIdx = -1;
+        document.getElementById('error-count').innerText = errors;
+        document.getElementById('win-overlay').style.display = 'none';
+        renderBoard();
+        updateKeypadStatus();
+        startTimer();
+    }
+
+    // --- 繪製 ---
+    function renderBoard() {
+        const container = document.getElementById('sudoku-grid');
+        container.innerHTML = '';
+        currentGrid.forEach((val, idx) => {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+
+            if (originalGrid[idx] !== 0) {
+                cell.innerText = val;
+                cell.classList.add('fixed');
+            } else if (val !== 0) {
+                cell.innerText = val;
+                cell.classList.add('inputted');
+                if (val !== solution[idx]) cell.classList.add('error');
+            } else if (notes[idx].length > 0) {
+                // 顯示筆記
+                const noteDiv = document.createElement('div');
+                noteDiv.className = 'note';
+                for (let n = 1; n <= 9; n++) {
+                    const nSpan = document.createElement('div');
+                    nSpan.className = 'note-num';
+                    if (notes[idx].includes(n)) nSpan.innerText = n;
+                    noteDiv.appendChild(nSpan);
+                }
+                cell.appendChild(noteDiv);
+            }
+            cell.onclick = () => selectCell(idx);
+            container.appendChild(cell);
+        });
+    }
+
+    // --- 互動邏輯 ---
+    function selectCell(idx) {
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(c => c.classList.remove('selected', 'highlight-axis', 'highlight-same'));
+        selectedIdx = idx;
+        const r = Math.floor(idx / 9);
+        const c = idx % 9;
+
+        // 1. 高亮行列
+        for (let i = 0; i < 81; i++) {
+            const ir = Math.floor(i / 9);
+            const ic = i % 9;
+            if (ir === r || ic === c) cells[i].classList.add('highlight-axis');
+        }
+
+        // 2. 點選
+        cells[idx].classList.add('selected');
+
+        // 3. 高亮相同數字
+        let val = currentGrid[idx];
+        if (val !== 0) {
+            currentGrid.forEach((v, i) => {
+                if (v === val) cells[i].classList.add('highlight-same');
+            });
+        }
+    }
+
+    function pressNumber(num) {
+        if (selectedIdx === -1) return;
+        if (originalGrid[selectedIdx] !== 0) return; // 原題數字不可改
+
+        // 保存歷史
+        history.push({ idx: selectedIdx, prevVal: currentGrid[selectedIdx], prevNotes: [...notes[selectedIdx]] });
+
+        if (noteMode) {
+            // 筆記模式
+            if (currentGrid[selectedIdx] === 0) {
+                const noteIdx = notes[selectedIdx].indexOf(num);
+                if (noteIdx > -1) notes[selectedIdx].splice(noteIdx, 1); // 移除
+                else notes[selectedIdx].push(num); // 新增
+            }
+        } else {
+            // 填色模式
+            notes[selectedIdx] = []; // 填入數字時清除筆記
+            currentGrid[selectedIdx] = num;
+            if (num !== solution[selectedIdx]) {
+                errors++;
+                document.getElementById('error-count').innerText = errors;
+                if (errors >= 3) { setTimeout(() => { alert("遊戲結束，錯誤過多！"); startNewGame(); }, 100); }
+            } else {
+                // 填對了，檢查勝負
+                setTimeout(checkWin, 100);
+            }
+        }
+        
+        renderBoard();
+        updateKeypadStatus();
+        selectCell(selectedIdx); // 保持選擇狀態
+    }
+
+    // --- 工具按鈕 ---
+    function toggleNoteMode() {
+        noteMode = !noteMode;
+        document.getElementById('note-btn').classList.toggle('active');
+        document.getElementById('note-mode-status').innerText = noteMode ? "開" : "關";
+    }
+
+    function eraseCell() {
+        if (selectedIdx === -1 || originalGrid[selectedIdx] !== 0) return;
+        history.push({ idx: selectedIdx, prevVal: currentGrid[selectedIdx], prevNotes: [...notes[selectedIdx]] });
+        currentGrid[selectedIdx] = 0;
+        notes[selectedIdx] = [];
+        renderBoard();
+        updateKeypadStatus();
+        selectCell(selectedIdx);
+    }
+
+    function undo() {
+        if (history.length === 0) return;
+        const last = history.pop();
+        currentGrid[last.idx] = last.prevVal;
+        notes[last.idx] = last.prevNotes;
+        renderBoard();
+        updateKeypadStatus();
+        selectCell(last.idx);
+    }
+
+    // --- 鍵盤狀態與勝負判斷 ---
+    function updateKeypadStatus() {
+        const currentCorrectCounts = Array(10).fill(0);
+        currentGrid.forEach((v,i) => { if(v === solution[i]) currentCorrectCounts[v]++; });
+
+        for (let i = 1; i <= 9; i++) {
+            const key = document.getElementById(`key-${i}`);
+            if (currentCorrectCounts[i] === 9) key.classList.add('completed');
+            else key.classList.remove('completed');
+        }
+    }
+
+    function checkWin() {
+        if (!currentGrid.includes(0) && errors < 3) {
+            let win = currentGrid.every((v, i) => v === solution[i]);
+            if (win) {
+                clearInterval(timerInterval);
+                // 確保最後一個數字渲染完成再顯示遮罩
+                setTimeout(() => {
+                    document.getElementById('win-overlay').style.display = 'flex';
+                }, 200);
+            }
+        }
+    }
+
+    // --- 計時器與新遊戲 ---
+    function startTimer() {
+        // 固定顯示一個時間，像截圖一樣，或者你可以選擇動態計時
+        // 這裡我們改為從 0 開始計時
+        seconds = 0;
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            seconds++;
+            let m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            let s = (seconds % 60).toString().padStart(2, '0');
+            document.getElementById('time').innerText = `${m}:${s}`;
+        }, 1000);
+    }
+
+    function startNewGame() {
+        initGame(puzzle);
+    }
+
+    // 啟動
+    startNewGame();
+</script>
+
+</body>
+</html>
