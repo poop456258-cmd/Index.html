@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>專業 H5 數獨</title>
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --bg-color: #f4f7f6;
+            --cell-size: 45px;
+        }
+        body { font-family: 'Arial', sans-serif; background: var(--bg-color); display: flex; flex-direction: column; align-items: center; margin: 0; padding: 10px; touch-action: manipulation; }
+        
+        .header { text-align: center; margin-bottom: 10px; }
+        .timer { font-size: 1.2rem; color: #666; margin-bottom: 10px; }
+
+        /* 數獨棋盤 */
+        #sudoku-grid {
+            display: grid;
+            grid-template-columns: repeat(9, var(--cell-size));
+            grid-template-rows: repeat(9, var(--cell-size));
+            border: 2px solid #2c3e50;
+            background-color: #2c3e50;
+            gap: 1px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .cell {
+            width: var(--cell-size); height: var(--cell-size);
+            background: #fff; display: flex; align-items: center; justify-content: center;
+            font-size: 1.4rem; cursor: pointer; transition: 0.2s;
+        }
+        /* 區隔九宮格 */
+        .cell:nth-child(3n) { border-right: 2px solid #2c3e50; }
+        .cell:nth-child(9n) { border-right: none; }
+        .cell:nth-child(n+19):nth-child(-n+27),
+        .cell:nth-child(n+46):nth-child(-n+54) { border-bottom: 2px solid #2c3e50; }
+
+        .cell.fixed { background: #ecf0f1; color: #2c3e50; font-weight: bold; }
+        .cell.selected { background: #3498db !important; color: white; }
+        .cell.same-num { background: #d6eaf8; }
+        .cell.error { color: #e74c3c; background: #fadbd8; }
+
+        /* 數字鍵盤 */
+        .keypad {
+            display: grid; grid-template-columns: repeat(5, 1fr);
+            gap: 8px; width: 100%; max-width: calc(var(--cell-size) * 9);
+            margin-top: 20px;
+        }
+        .key {
+            background: white; padding: 15px 0; border-radius: 8px;
+            text-align: center; font-size: 1.2rem; font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: pointer;
+        }
+        .key:active { transform: scale(0.95); background: var(--primary-color); color: white; }
+        .btn-new { margin-top: 20px; padding: 10px 30px; border: none; background: #27ae60; color: white; border-radius: 20px; font-size: 1rem; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>數獨大師</h1>
+    <div class="timer">時間: <span id="time">00:00</span></div>
+</div>
+
+<div id="sudoku-grid"></div>
+
+<div class="keypad">
+    <div class="key" onclick="pressNumber(1)">1</div>
+    <div class="key" onclick="pressNumber(2)">2</div>
+    <div class="key" onclick="pressNumber(3)">3</div>
+    <div class="key" onclick="pressNumber(4)">4</div>
+    <div class="key" onclick="pressNumber(5)">5</div>
+    <div class="key" onclick="pressNumber(6)">6</div>
+    <div class="key" onclick="pressNumber(7)">7</div>
+    <div class="key" onclick="pressNumber(8)">8</div>
+    <div class="key" onclick="pressNumber(9)">9</div>
+    <div class="key" onclick="pressNumber(0)" style="color: #e74c3c;">清除</div>
+</div>
+
+<button class="btn-new" onclick="startNewGame()">新遊戲</button>
+
+<script>
+    let grid = [];
+    let solution = [];
+    let selectedIdx = -1;
+    let seconds = 0;
+    let timerInterval;
+
+    // --- 數獨生成核心邏輯 ---
+    function isSafe(board, row, col, num) {
+        for (let x = 0; x < 9; x++) if (board[row][x] === num || board[x][col] === num) return false;
+        let startRow = row - row % 3, startCol = col - col % 3;
+        for (let i = 0; i < 3; i++)
+            for (let j = 0; j < 3; j++)
+                if (board[i + startRow][j + startCol] === num) return false;
+        return true;
+    }
+
+    function solve(board) {
+        for (let row = 0; row < 9; row++) {
+            for (let col = 0; col < 9; col++) {
+                if (board[row][col] === 0) {
+                    let nums = [1,2,3,4,5,6,7,8,9].sort(() => Math.random() - 0.5);
+                    for (let num of nums) {
+                        if (isSafe(board, row, col, num)) {
+                            board[row][col] = num;
+                            if (solve(board)) return true;
+                            board[row][col] = 0;
+                        }
+                    }
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    function generatePuzzle() {
+        let board = Array.from({ length: 9 }, () => Array(9).fill(0));
+        solve(board);
+        solution = board.map(row => [...row]);
+        // 隨機挖洞 (難度設定：挖去 40 個數字)
+        let attempts = 40;
+        while (attempts > 0) {
+            let r = Math.floor(Math.random() * 9);
+            let c = Math.floor(Math.random() * 9);
+            if (board[r][c] !== 0) {
+                board[r][c] = 0;
+                attempts--;
+            }
+        }
+        return board;
+    }
+
+    // --- 介面控制 ---
+    function renderBoard() {
+        const container = document.getElementById('sudoku-grid');
+        container.innerHTML = '';
+        grid.flat().forEach((val, idx) => {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            if (val !== 0) {
+                cell.innerText = val;
+                cell.classList.add('fixed');
+            }
+            cell.onclick = () => selectCell(idx);
+            container.appendChild(cell);
+        });
+    }
+
+    function selectCell(idx) {
+        const cells = document.querySelectorAll('.cell');
+        if (cells[idx].classList.contains('fixed')) return;
+        
+        cells.forEach(c => c.classList.remove('selected', 'same-num'));
+        selectedIdx = idx;
+        cells[idx].classList.add('selected');
+        
+        // 醒目提示相同數字
+        let val = cells[idx].innerText;
+        if(val) {
+            cells.forEach(c => { if(c.innerText === val) c.classList.add('same-num'); });
+        }
+    }
+
+    function pressNumber(num) {
+        if (selectedIdx === -1) return;
+        const cells = document.querySelectorAll('.cell');
+        const r = Math.floor(selectedIdx / 9);
+        const c = selectedIdx % 9;
+
+        if (num === 0) {
+            cells[selectedIdx].innerText = '';
+            cells[selectedIdx].classList.remove('error');
+        } else {
+            cells[selectedIdx].innerText = num;
+            // 檢查是否正確
+            if (num !== solution[r][c]) {
+                cells[selectedIdx].classList.add('error');
+            } else {
+                cells[selectedIdx].classList.remove('error');
+                checkWin();
+            }
+        }
+    }
+
+    function checkWin() {
+        const cells = document.querySelectorAll('.cell');
+        const currentData = Array.from(cells).map(c => parseInt(c.innerText) || 0);
+        if (!currentData.includes(0) && !document.querySelector('.error')) {
+            clearInterval(timerInterval);
+            alert(`恭喜！你花了 ${document.getElementById('time').innerText} 完成挑戰！`);
+        }
+    }
+
+    // --- 計時器 ---
+    function startTimer() {
+        seconds = 0;
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            seconds++;
+            let m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            let s = (seconds % 60).toString().padStart(2, '0');
+            document.getElementById('time').innerText = `${m}:${s}`;
+        }, 1000);
+    }
+
+    function startNewGame() {
+        grid = generatePuzzle();
+        renderBoard();
+        selectedIdx = -1;
+        startTimer();
+    }
+
+    // 啟動
+    startNewGame();
+</script>
+
+</body>
+</html>
